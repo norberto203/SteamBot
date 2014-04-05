@@ -63,8 +63,12 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="HatUserHandler.cs" />
+    <Compile Include="Pricelist.cs" />
     <Compile Include="SteamGroups\CMsgInviteUserToGroup.cs" />
     <Compile Include="SteamTradeDemoHandler.cs" />
+    <Compile Include="StrangeBankV2UserHandler.cs" />
+    <Compile Include="StrangeUserHandler.cs" />
     <Compile Include="TF2GC\Crafting.cs" />
     <Compile Include="TF2GC\Items.cs" />
     <Compile Include="TF2GC\MsgCraft.cs" />
@@ -80,8 +84,10 @@
     <Compile Include="3rdparty\Options.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="TF2GC\MsgDelete.cs" />
+    <Compile Include="ToolUserHandler.cs" />
     <Compile Include="UserHandler.cs" />
     <Compile Include="SimpleUserHandler.cs" />
+    <Compile Include="VintageUserHandler.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
   <ItemGroup>
@@ -93,6 +99,17 @@
   <ItemGroup>
     <None Include="app.config" />
     <None Include="packages.config" />
+    <None Include="settings.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="banned_users.txt">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="blacklist.txt">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
   <Import Project="$(SolutionDir)\.nuget\NuGet.targets" Condition="Exists('$(SolutionDir)\.nuget\NuGet.targets')" />
 </Project>
