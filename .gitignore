@@ -29,3 +29,8 @@ packages
 
 # Allow NuGet specific exes and dlls
 !.nuget/Microsoft.Build.dll
+
+# Exclude account info
+/SteamBot/settings.json
+/Bin/Debug/settings.json
+/Bin/Release/settings.json
