@@ -64,10 +64,11 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="HatUserHandler.cs" />
+    <Compile Include="Price.cs" />
     <Compile Include="Pricelist.cs" />
     <Compile Include="SteamGroups\CMsgInviteUserToGroup.cs" />
     <Compile Include="SteamTradeDemoHandler.cs" />
-    <Compile Include="StrangeBankV2UserHandler.cs" />
+    <Compile Include="StrangeBankUserHandler.cs" />
     <Compile Include="StrangeUserHandler.cs" />
     <Compile Include="TF2GC\Crafting.cs" />
     <Compile Include="TF2GC\Items.cs" />

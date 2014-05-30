@@ -7,41 +7,41 @@ using SteamTrade;
 
 namespace SteamBot
 {
-    class VintageUserHandler : StrangeBankV2UserHandler
+    class VintageUserHandler : StrangeBankUserHandler
     {
         public VintageUserHandler(Bot bot, SteamID sid) : base(bot, sid) { }
 
-        public override int GetOtherValue(Inventory.Item inventoryItem, Schema.Item schemaItem)
+        public override Price OtherValue(Inventory.Item inventoryItem, Schema.Item schemaItem)
         {
-            int value = ToScrap(Pricelist.getLowPrice(inventoryItem.Defindex, inventoryItem.Quality));
+            Price value = Pricelist.Get(inventoryItem.Defindex, inventoryItem.Quality, false);
             //int highValue = ToScrap(Pricelist.getHighPrice(inventoryItem.Defindex, inventoryItem.Quality));
 
-            if (value <= 3)
-                return value - 1;
-            if (value <= 6)
-                return value - 2;
-            if (value <= 12)
-                return value - 3;
-            if (value <= 15)
-                return 9;
-            if (value <= ToScrap(new Pricelist.Price(3, "metal")))
-                return value - 6;
-            if (value <= ToScrap(new Pricelist.Price(3.33, "metal")))
-                return ToScrap(new Pricelist.Price(2.33, "metal"));
-            if (value <= ToScrap(new Pricelist.Price(5, "metal")))
-                return value - 9;
+            if (value <= Pricelist.Scrap * 3)
+                return value - Pricelist.Scrap * 1;
+            if (value <= Pricelist.Scrap * 6)
+                return value - Pricelist.Scrap * 2;
+            if (value <= Pricelist.Refined * 1.33)
+                return value - Pricelist.Scrap * 3;
+            if (value <= Pricelist.Refined * 1.66)
+                return Pricelist.Refined * 1;
+            if (value <=  Pricelist.Refined * 3)
+                return value - Pricelist.Scrap * 0.66;
+            if (value <=  Pricelist.Refined * 3.33)
+                return  Pricelist.Refined * 2.33;
+            if (value <=  Pricelist.Refined * 5)
+                return value -  Pricelist.Refined * 1;
             else
-                return ToScrap(new Pricelist.Price(4, "metal"));
+                return  Pricelist.Refined * 4;
         }
 
-        public override int GetMyValue(Inventory.Item inventoryItem, Schema.Item schemaItem)
+        public override Price MyValue(Inventory.Item inventoryItem, Schema.Item schemaItem)
         {
-            return ToScrap(Pricelist.getLowPrice(inventoryItem.Defindex, inventoryItem.Quality));
+            return Pricelist.Get(inventoryItem.Defindex, inventoryItem.Quality, false);
         }
 
         public override bool ShouldBuy(Inventory.Item inventoryItem, Schema.Item schemaItem, out string reason)
         {
-            int count = Trade.MyInventory.GetItemsByDefindex(inventoryItem.Defindex).Count;
+            int count = getNumItems(inventoryItem.Defindex, inventoryItem.Quality);
 
             foreach (ulong id in Trade.OtherOfferedItems)
             {

@@ -7,7 +7,7 @@ using System.Net;
 
 namespace SteamBot
 {
-    public class StrangeBankV2UserHandler : UserHandler
+    public class StrangeBankUserHandler : UserHandler
     {
         private int otherItemValue;
         private int otherMetal;
@@ -24,7 +24,7 @@ namespace SteamBot
 
         private Dictionary<int, int> metal = new Dictionary<int, int>() { { 5000, 1 }, { 5001, 3 }, { 5002, 9 } };
 
-        public StrangeBankV2UserHandler(Bot bot, SteamID sid) : base(bot, sid) { }
+        public StrangeBankUserHandler(Bot bot, SteamID sid) : base(bot, sid) { }
 
         public override void OnLoginCompleted()
         {
@@ -96,10 +96,11 @@ namespace SteamBot
 
                 string reason;
                 
-                if (ShouldSell(item, schemaItem, out reason))
+                if (ShouldSell(item, schemaItem, out reason) && Pricelist.HasPrice(item.Defindex, item.Quality) && Trade.AddItem(itemID))
                 {
-                    Trade.AddItem(itemID);
-                    myItemValue += GetMyValue(item, schemaItem);
+                    Price value = MyValue(item, schemaItem);
+                    Trade.SendMessage(String.Format("Adding {0}. Cost: {1}", schemaItem.Name, value));
+                    myItemValue += value.Scrap;
                     balanceTrade();
                 }
                 else
@@ -242,11 +243,12 @@ namespace SteamBot
                     reason = "I cannot accept keys currently, due to either an abundance of keys or a lack of metal.";
                 }
             }
-            else if (ShouldBuy(inventoryItem, schemaItem, out reason))
+            else if (ShouldBuy(inventoryItem, schemaItem, out reason) && Pricelist.HasPrice(inventoryItem.Defindex, inventoryItem.Quality))
             {
-                int value = GetOtherValue(inventoryItem, schemaItem);
+                Price p = OtherValue(inventoryItem, schemaItem);
+                int value = p.Scrap;
                 otherItemValue += value;
-                Trade.SendMessage(String.Format("Added: {0}. Paying {1} refined each.", schemaItem.Name, ((value * 100) / 9) / 100.0));
+                Trade.SendMessage(String.Format("Added: {0}. Paying {1} each.", schemaItem.Name, p));
             }
             else
                 Trade.SendMessage(String.Format("Item: {0} could not be accepted. Reason: {1}", schemaItem.Name, reason));
@@ -260,12 +262,12 @@ namespace SteamBot
                 otherMetal -= metal[inventoryItem.Defindex];
             else if (inventoryItem.Defindex == 5021 && getNumItems(5021, "6") < 4 && getNumItems(5002, "6") > 10)
                 otherKeys--;
-            else if (ShouldBuy(inventoryItem, schemaItem, out reason))
-                otherItemValue -= GetOtherValue(inventoryItem, schemaItem);
+            else if (ShouldBuy(inventoryItem, schemaItem, out reason) && Pricelist.HasPrice(inventoryItem.Defindex, inventoryItem.Quality))
+                otherItemValue -= OtherValue(inventoryItem, schemaItem).Scrap;
             balanceTrade();
         }
 
-        private int getNumItems(int defindex, string quality)
+        protected int getNumItems(int defindex, string quality)
         {
             int count = 0;
             Bot.GetInventory();
@@ -290,7 +292,7 @@ namespace SteamBot
                 return;
             }
 
-            int metalNeeded = otherItemValue + otherMetal + otherKeys * GetKeyPrice() - myItemValue;
+            int metalNeeded = otherItemValue + otherMetal + otherKeys * Pricelist.Key.Scrap - myItemValue;
 
             while (myMetal < metalNeeded)
             {
@@ -316,7 +318,7 @@ namespace SteamBot
                     myMetal--;
                 else
                 {
-                    Trade.SendMessage("You must add " + ((myMetal - metalNeeded) * 100 / 9) / 100.0 + " refined worth of items to balance the trade.");
+                    Trade.SendMessage("You must add " + new Price(myMetal - metalNeeded) + " worth of items to balance the trade.");
                     return;
                 }
             }
@@ -347,9 +349,9 @@ namespace SteamBot
                     Schema.Item schemaItem = Trade.CurrentSchema.GetItem(item.Defindex);
 
                     string reason;
-                    if (ShouldSell(item, Trade.CurrentSchema.GetItem(item.Defindex), out reason))
+                    if (ShouldSell(item, Trade.CurrentSchema.GetItem(item.Defindex), out reason) && Pricelist.HasPrice(item.Defindex, item.Quality))
                     {
-                        Trade.SendMessage("Name: " + schemaItem.Name + ". Index: " + item.Defindex + ". Price: " + (GetMyValue(item, schemaItem) * 100 / 9) / 100.0);
+                        Trade.SendMessage("Name: " + schemaItem.Name + ". Index: " + item.Defindex + ". Price: " + MyValue(item, schemaItem));
                     }
                 }
             }
@@ -431,9 +433,11 @@ namespace SteamBot
 
             string reason;
 
-            if (ShouldSell(inventoryItem, schemaItem, out reason) && Trade.AddItem(inventoryItem.Id))
+            if (ShouldSell(inventoryItem, schemaItem, out reason) && Pricelist.HasPrice(inventoryItem.Defindex, inventoryItem.Quality) && Trade.AddItem(inventoryItem.Id))
             {
-                myItemValue += GetMyValue(inventoryItem, schemaItem);
+                Price value = MyValue(inventoryItem, schemaItem);
+                Trade.SendMessage(String.Format("Adding {0}. Cost: {1}", schemaItem.Name, value));
+                myItemValue += value.Scrap;
                 return true;
             }
             else
@@ -468,7 +472,7 @@ namespace SteamBot
                 {
                     if (item.Defindex == defindex && Trade.RemoveItem(item.Id))
                     {
-                        myItemValue -= GetMyValue(item, Trade.CurrentSchema.GetItem(item.Defindex));
+                        myItemValue -= MyValue(item, Trade.CurrentSchema.GetItem(item.Defindex)).Scrap;
                         return true;
                     }
                 }
@@ -481,7 +485,7 @@ namespace SteamBot
                     Schema.Item schemaItem = Trade.CurrentSchema.GetItem(item.Defindex);
                     if (schemaItem.Name.ToLower().Contains(key) && Trade.RemoveItem(item.Id))
                     {
-                        myItemValue -= GetMyValue(item, schemaItem);
+                        myItemValue -= MyValue(item, schemaItem).Scrap;
                         return true;
                     }
                 }
@@ -583,7 +587,14 @@ namespace SteamBot
             
             else if (message.Equals("list"))
             {
-                SendInventoryList();
+                try
+                {
+                    SendInventoryList();
+                }
+                catch (Exception ex)
+                {
+                    Bot.SteamFriends.SendChatMessage(OtherSID, EChatEntryType.ChatMsg, ex.Message + ", stack: " + ex.StackTrace);
+                }
             }
 
             else if (message.Equals("donate"))
@@ -599,7 +610,7 @@ namespace SteamBot
 
             else if (message.StartsWith("addmetal") && IsAdmin)
             {
-                string[] msg = message.Split(new char[] { ' ' });
+                string[] msg = message.Split(' ');
                 int amount = (int)(Convert.ToDouble(msg[1]) * 9 + 0.5);
                 otherMetal += amount;
                 balanceTrade();
@@ -607,7 +618,7 @@ namespace SteamBot
 
             else if (message.StartsWith("addkey") && IsAdmin)
             {
-                Trade.AddItemByDefindex(5021);
+                Trade.AddAllItemsByDefindex(5021);
                 balanceTrade();
             }
 
@@ -723,62 +734,18 @@ namespace SteamBot
 
         public virtual bool ShouldSell(Inventory.Item inventoryItem, Schema.Item schemaItem, out string reason)
         {
-            reason = "I could not find the price of that item";
-            return GetMyValue(inventoryItem, schemaItem) != 0;
+            reason = "None";
+            return true;
         }
 
-        public virtual int GetOtherValue(Inventory.Item inventoryItem, Schema.Item schemaItem)
+        public virtual Price OtherValue(Inventory.Item inventoryItem, Schema.Item schemaItem)
         {
-            try
-            {
-                return ToScrap(Pricelist.getLowPrice(inventoryItem.Defindex, inventoryItem.Quality));
-            }
-            catch (Exception)
-            {
-                return 0;
-            }
+            return Pricelist.Get(inventoryItem.Defindex, inventoryItem.Quality, false);
         }
 
-        public virtual int GetMyValue(Inventory.Item inventoryItem, Schema.Item schemaItem)
+        public virtual Price MyValue(Inventory.Item inventoryItem, Schema.Item schemaItem)
         {
-            try
-            {
-                return ToScrap(Pricelist.getHighPrice(inventoryItem.Defindex, inventoryItem.Quality));
-            }
-            catch (Exception)
-            {
-                return 0;
-            }
-        }
-
-        public virtual int ToScrap(Pricelist.Price price)
-        {
-            if (price.Currency == "metal")
-            {
-                return (int)(price.Value * 9 + 0.5);
-            }
-            else if (price.Currency == "keys")
-            {
-                return (int)(price.Value * GetKeyPrice() + 0.5);
-            }
-            else if (price.Currency == "buds")
-            {
-                return (int)(price.Value * GetBudsPrice() + 0.5);
-            }
-            else
-            {
-                return 0;
-            }
-        }
-
-        public virtual int GetKeyPrice()
-        {
-            return (int)(Pricelist.getHighPrice(5021, "6").Value * 9 + 0.5);
-        }
-
-        public virtual int GetBudsPrice()
-        {
-            return (int)(Pricelist.getLowPrice(143, "6").Value * GetKeyPrice() + 0.5);
+            return Pricelist.Get(inventoryItem.Defindex, inventoryItem.Quality, true);
         }
     }
 }

@@ -7,7 +7,8 @@ using SteamTrade;
 
 namespace SteamBot
 {
-    class ToolUserHandler : StrangeBankV2UserHandler
+    /*
+    class ToolUserHandler : StrangeBankUserHandler
     {
         private HashSet<int> Tools = new HashSet<int>() { 
             5020, 5026, 5027, 5028, 5029, 5030, 5031, 5032, 
@@ -81,4 +82,5 @@ namespace SteamBot
             return IsTool(inventoryItem, schemaItem);
         }
     }
+     * */
 }

@@ -7,7 +7,7 @@ using SteamTrade;
 
 namespace SteamBot
 {
-    class HatUserHandler : StrangeBankV2UserHandler
+    class HatUserHandler : StrangeBankUserHandler
     {
         private HashSet<int> BannedHats = new HashSet<int>() { 125, 279, 584, 189, 240, 268, 269, 270, 272, 272, 273, 274, 275, 276, 277, 292, 299 };
 
@@ -16,40 +16,34 @@ namespace SteamBot
             Pricelist.LoadBlacklist();
         }
 
-        public override int GetMyValue(Inventory.Item inventoryItem, Schema.Item schemaItem)
+        public override Price MyValue(Inventory.Item inventoryItem, Schema.Item schemaItem)
         {
-            try
-            {
-                return ToScrap(Pricelist.getLowPrice(inventoryItem.Defindex, inventoryItem.Quality));
-            }
-            catch (Exception)
-            {
-                return 0;
-            }
+            return Pricelist.Get(inventoryItem.Defindex, inventoryItem.Quality, false);
         }
 
-        public override int GetOtherValue(Inventory.Item inventoryItem, Schema.Item schemaItem)
+        public override Price OtherValue(Inventory.Item inventoryItem, Schema.Item schemaItem)
         {
-            int value = ToScrap(Pricelist.getLowPrice(inventoryItem.Defindex, inventoryItem.Quality));
+            Price value = Pricelist.Get(inventoryItem.Defindex, inventoryItem.Quality, false);
             //int highValue = ToScrap(Pricelist.getHighPrice(inventoryItem.Defindex, inventoryItem.Quality));
 
-            if (value < ToScrap(new Pricelist.Price(1.33, "metal")))
-                return 0;
-            if (value <= ToScrap(new Pricelist.Price(2, "metal")))
-                return value - 3;
-            if (value <= ToScrap(new Pricelist.Price(2.33, "metal")))
-                return ToScrap(new Pricelist.Price(1.66, "metal"));
-            if (value <= ToScrap(new Pricelist.Price(3.33, "metal")))
-                return value - 6;
-            if (value <= ToScrap(new Pricelist.Price(3.66, "metal")))
-                return ToScrap(new Pricelist.Price(2.66, "metal"));
-            if (value <= ToScrap(new Pricelist.Price(5, "metal")))
-                return value - 9;
-            if (value <= ToScrap(new Pricelist.Price(5.66, "metal")))
-                return ToScrap(new Pricelist.Price(4, "metal"));
-            if (value <= ToScrap(new Pricelist.Price(6.66, "metal")))
-                return value - ToScrap(new Pricelist.Price(1.66, "metal"));
-            return ToScrap(new Pricelist.Price(5, "metal"));
+            if (value < Pricelist.Refined * 1.33)
+                return Price.Zero;
+            if (value <= Pricelist.Refined * 2)
+                return value - Pricelist.Scrap * 3;
+            if (value <= Pricelist.Refined * 2.33)
+                return Pricelist.Refined * 1.66;
+            if (value <= Pricelist.Refined * 3.33)
+                return value - Pricelist.Scrap * 6;
+            if (value <= Pricelist.Refined * 3.66)
+                return Pricelist.Refined * 2.66;
+            if (value <= Pricelist.Refined * 5)
+                return value - Pricelist.Refined * 1;
+            if (value <= Pricelist.Refined * 5.66)
+                return Pricelist.Refined * 4;
+            if (value <= Pricelist.Refined * 6.66)
+                return value - Pricelist.Refined * 1.66;
+            else
+                return Pricelist.Refined * 5;
         }
 
         public bool IsCraftHat(Inventory.Item inventoryItem, Schema.Item schemaItem)
@@ -77,7 +71,7 @@ namespace SteamBot
                 return false;
             }
 
-            if (ToScrap(Pricelist.getLowPrice(inventoryItem.Defindex, inventoryItem.Quality)) < 12)
+            if (Pricelist.Get(inventoryItem.Defindex, inventoryItem.Quality, false) < Pricelist.Refined * 1.33)
             {
                 reason = "Item is below minimum accepted price.";
                 return false;
@@ -94,7 +88,7 @@ namespace SteamBot
                 reason = "Item is gifted.";
                 return false;
             }
-            int count = Trade.MyInventory.GetItemsByDefindex(inventoryItem.Defindex).Count;
+            int count = getNumItems(inventoryItem.Defindex, inventoryItem.Quality);
 
             foreach (ulong id in Trade.OtherOfferedItems)
             {
@@ -109,25 +103,20 @@ namespace SteamBot
                 reason = "I have too many of that item.";
                 return false;
             }
-            reason = null;
+            reason = "Pass";
             return true;
         }
 
         public override bool ShouldSell(Inventory.Item inventoryItem, Schema.Item schemaItem, out string reason)
         {
-            if (GetMyValue(inventoryItem, schemaItem) == 0)
-            {
-                reason = "I could not find the price of that item";
-                return false;
-            }
-            else if (!IsCraftHat(inventoryItem, schemaItem))
+            if (!IsCraftHat(inventoryItem, schemaItem))
             {
                 reason = "Item is not a craft hat.";
                 return false;
             }
             else
             {
-                reason = "I could not find the price of that item";
+                reason = "Pass";
                 return true;
             }
         }

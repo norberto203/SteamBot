@@ -4,20 +4,214 @@ using System.Linq;
 using System.Text;
 using System.Net;
 using System.IO;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace SteamBot
 {
     public static class Pricelist
     {
-        private static Dictionary<String, Object> prices = null;
+        private static JToken pricelist;
+
+        // Stock weapons are keyed by their non-upgradeable index in the pricelist, so we need to convert the upgradeable defindex to the Normal quality one.
+        private static Dictionary<int, int> old = new Dictionary<int, int> 
+        { 
+            { 205, 18 }, // Rocket Launcher
+            { 199, 10 }, // Shotgun (All Four Classes)
+            { 196, 6 },  // Shovel
+        
+            { 208, 21 }, // Flamethrower
+            { 192, 2 },  // Fire Axe
+
+            { 200, 13 }, // Scattergun
+            { 209, 23 }, // Pistol (Engie and Scout)
+            { 190, 0 },  // Bat
+
+            { 206, 19 }, // Grenade Launcher
+            { 207, 20 }, // Stickybomb Launcher
+            { 191, 1 },  // Bottle
+
+            { 202, 15 }, // Minigun
+            { 195, 5 },  // Fists
+
+            { 197, 7 },  // Wrench
+            { 737, 25 }, // Construction PDA
+
+            { 211, 29 }, // Medigun
+            { 204, 17 }, // Syringe Gun
+            { 198, 8 },  // Bonesaw
+
+            { 201, 14 }, // Sniper Rifle
+            { 203, 16 }, // SMG
+            { 193, 3 },  // Kukri
+
+            
+            { 210, 24 }, // Revolver
+            { 212, 30 }, // Invis Watch
+            { 194, 4 },  // Knife
+        };
+
         public static HashSet<int> blacklist = null;
+
+        private static string pricelistFile = "pricelist.json";
+        private static string blacklistFile = "blacklist.txt";
+        private static string apiURL = "http://backpack.tf/api/IGetPrices/v3/?format=json&key={0}";
+        private static string apiKey = "51a1653bba25360638000001";
+
+        public static Price Get(int defindex, string quality, bool high)
+        {
+            float value;
+            string currency;
+
+            GetRaw(defindex, quality, high, out value, out currency);
+            return new Price(ToScrap(value, currency));
+        }
+
+        public static bool HasPrice(int defindex, string quality)
+        {
+            if (old.ContainsKey(defindex))
+            {
+                defindex = old[defindex];
+            }
+            JToken location = null;
+            try
+            {
+                location = pricelist.SelectToken(defindex.ToString()).SelectToken(quality).SelectToken("0").SelectToken("current");
+            }
+            catch (NullReferenceException) { }
+            if (location == null)
+            {
+                return false;
+            }
+            string currency = (string)location["currency"];
+            if (currency == "metal" || currency == "keys" || currency == "earbuds" || currency == "usd")
+            {
+                return true;
+            }
+            return false;
+        }
+
+        private static void GetRaw(int defindex, string quality, bool high, out float value, out string currency)
+        {
+            if (old.ContainsKey(defindex))
+            {
+                defindex = old[defindex];
+            }
+            string key = high ? "value_high" : "value";
+            JToken location = null;
+            try
+            {
+                location = pricelist.SelectToken(defindex.ToString()).SelectToken(quality).SelectToken("0").SelectToken("current");
+            }
+            catch (NullReferenceException) { }
+            if (location == null)
+            {
+                throw new PriceNotFoundException(defindex, quality);
+            }
+
+            JToken item = location[key];
+            if (item == null)
+            {
+                item = location["value"];
+            }
+
+            value = (float)item;
+            currency = (string)location["currency"];
+        }
+
+        private static int ToScrap(float value, string currency)
+        {
+            if (currency == "metal")
+            {
+                return (int)Math.Round(value * 9);
+            }
+            else if (currency == "keys")
+            {
+                return (int)Math.Round(value * Key.Scrap);
+            }
+            else if (currency == "earbuds")
+            {
+                return (int)Math.Round(value * Earbuds.Scrap);
+            }
+            else if (currency == "usd")
+            {
+                return (int)Math.Round(value * USD.Scrap);
+            }
+            else
+            {
+                throw new CurrencyNotFoundException(currency);
+            }
+        }
+
+        public static Price Key
+        {
+            get
+            {
+                float value;
+                string currency;
+
+                GetRaw(5021, "6", true, out value, out currency);
+                return new Price(ToScrap(value, currency));
+            }
+        }
+
+        public static Price Earbuds
+        {
+            get
+            {
+                float value;
+                string currency;
+
+                GetRaw(143, "6", true, out value, out currency);
+
+                return new Price(ToScrap(value, currency));
+            }
+        }
+
+        public static Price Refined
+        {
+            get
+            {
+                return new Price(9);
+            }
+        }
+
+        public static Price Reclaimed
+        {
+            get
+            {
+                return new Price(3);
+            }
+        }
+
+        public static Price Scrap
+        {
+            get
+            {
+                return new Price(1);
+            }
+        }
+
+        public static Price USD
+        {
+            get
+            {
+                float value;
+                string currency;
+
+                GetRaw(5002, "6", true, out value, out currency);
+
+                return new Price((int)((1 / value) * 9));
+            }
+        }
+
 
         public static void LoadBlacklist()
         {
             if (blacklist == null)
             {
                 blacklist = new HashSet<int>();
-                StreamReader reader = new StreamReader("blacklist.txt");
+                StreamReader reader = new StreamReader(blacklistFile);
                 string line;
                 while ((line = reader.ReadLine()) != null)
                 {
@@ -30,134 +224,33 @@ namespace SteamBot
         {
             try
             {
-                string data = new WebClient().DownloadString("http://backpack.tf/api/IGetPrices/v3/?format=vdf&key=51a1653bba25360638000001");
-                File.WriteAllText("pricelist.vdf", data);
-                prices = loadPricelist(data);
+                string raw = new WebClient().DownloadString(String.Format(apiURL, apiKey));
+                JObject temp = JObject.Parse(raw);
+                pricelist = temp["response"]["prices"];
+                File.WriteAllText(pricelistFile, raw);
             }
-            catch (WebException)
+            catch (WebException) { }
+
+            if (pricelist == null)
             {
-                if (prices == null)
-                {
-                    StreamReader reader = new StreamReader("pricelist.vdf");
-                    string data = reader.ReadToEnd();
-                    reader.Close();
-                    prices = loadPricelist(data);
-                }
+                StreamReader reader = new StreamReader(pricelistFile);
+                string raw = reader.ReadToEnd();
+                reader.Close();
+                pricelist = JObject.Parse(raw)["response"]["prices"];
+                
             }
         }
 
-        private static Dictionary<string, Object> loadPricelist(string pricelist)
+        
+
+        public class PriceNotFoundException : Exception 
         {
-            string[] file = pricelist.Split(new char[] { '\n' });
-            int i = 0;
-            return readThroughBraces(file, ref i);
+            public PriceNotFoundException(int defindex, string quality) : base(String.Format("Price for defindex {0} and quality {1} could not be found.", defindex, quality)) { }
         }
 
-        private static Object[] readKey(string[] file, ref int i)
+        public class CurrencyNotFoundException : Exception
         {
-            string key = file[i].Trim();
-            Object[] keyObject = new Object[2];
-            string nextLine = null;
-            if (i != file.Length - 1)
-            {
-                nextLine = file[i + 1].Trim();
-            }
-            if (nextLine != null && nextLine.Equals("{"))
-            {
-                i += 2;
-                keyObject[1] = readThroughBraces(file, ref i);
-                keyObject[0] = key.Replace("\"", "");
-            }
-
-            else
-            {
-                int start1 = key.IndexOf("\"", 0);
-                int end1 = key.IndexOf("\"", start1 + 1);
-                int start2 = key.IndexOf("\"", end1 + 1);
-                int end2 = key.IndexOf("\"", start2 + 1);
-
-                keyObject[0] = key.Substring(start1 + 1, end1 - start1 - 1);
-                keyObject[1] = key.Substring(start2 + 1, end2 - start2 - 1);
-            }
-            return keyObject;
-        }
-
-        private static Dictionary<string, Object> readThroughBraces(string[] file, ref int i)
-        {
-            Dictionary<string, Object> subdict = new Dictionary<string, object>();
-            for (; (i < file.Length && !file[i].Trim().Equals("}")); i++)
-            {
-                if (file[i].Trim().Equals(""))
-                {
-                    continue;
-                }
-                Object[] keyInfo = readKey(file, ref i);
-                subdict.Add((string)keyInfo[0], keyInfo[1]);
-            }
-            return subdict;
-        }
-
-        public static string getCurrency(int defindex, string quality)
-        {
-            return (string)traverse("Response", "prices", defindex + "", quality, "0", "currency");
-        }
-
-        public static Price getHighPrice(int defindex, string quality)
-        {
-            double value = Convert.ToDouble((string)traverse("Response", "prices", defindex + "", quality + "", "0", "value_high"));
-            string currency = getCurrency(defindex, quality);
-            return new Price(value, currency);
-        }
-
-        public static Price getLowPrice(int defindex, string quality)
-        {
-            double value = Convert.ToDouble((string)traverse("Response", "prices", defindex + "", quality, "0", "value" ));
-            string currency = getCurrency(defindex, quality);
-            return new Price(value, currency);
-        }
-
-        private static Object traverse(Dictionary<string, object> currentLevel, string[] keys, int index)
-        {
-            if (currentLevel.ContainsKey(keys[index]))
-            {
-                Object value = currentLevel[keys[index]];
-
-                if (index >= keys.Length - 1)
-                {
-                    return value;
-                }
-
-                else
-                {
-                    currentLevel = (Dictionary<string, object>)value;
-                    return traverse(currentLevel, keys, index + 1);
-                }
-            }
-            else
-            {
-                if (keys[index].Equals("value_high") && currentLevel.ContainsKey("value"))
-                {
-                    return currentLevel["value"];
-                }
-                throw new Exception(String.Format("Could not find the key {0} in {1}", keys[index], keys.ToString()));
-            }
-        }
-
-        public static Object traverse(params string[] keys)
-        {
-            return traverse(prices, keys, 0);
-        }
-
-        public struct Price
-        {
-            public Price(double value, string currency)
-            {
-                Value = value;
-                Currency = currency;
-            }
-
-            public double Value;
-            public string Currency;
+            public CurrencyNotFoundException(string currency) : base(String.Format("Invalid currency: {0}", currency)) { }
         }
     }
 }
