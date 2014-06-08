@@ -13,50 +13,12 @@ namespace SteamBot
     {
         private static JToken pricelist;
 
-        // Stock weapons are keyed by their non-upgradeable index in the pricelist, so we need to convert the upgradeable defindex to the Normal quality one.
-        private static Dictionary<int, int> old = new Dictionary<int, int> 
-        { 
-            { 205, 18 }, // Rocket Launcher
-            { 199, 10 }, // Shotgun (All Four Classes)
-            { 196, 6 },  // Shovel
-        
-            { 208, 21 }, // Flamethrower
-            { 192, 2 },  // Fire Axe
-
-            { 200, 13 }, // Scattergun
-            { 209, 23 }, // Pistol (Engie and Scout)
-            { 190, 0 },  // Bat
-
-            { 206, 19 }, // Grenade Launcher
-            { 207, 20 }, // Stickybomb Launcher
-            { 191, 1 },  // Bottle
-
-            { 202, 15 }, // Minigun
-            { 195, 5 },  // Fists
-
-            { 197, 7 },  // Wrench
-            { 737, 25 }, // Construction PDA
-
-            { 211, 29 }, // Medigun
-            { 204, 17 }, // Syringe Gun
-            { 198, 8 },  // Bonesaw
-
-            { 201, 14 }, // Sniper Rifle
-            { 203, 16 }, // SMG
-            { 193, 3 },  // Kukri
-
-            
-            { 210, 24 }, // Revolver
-            { 212, 30 }, // Invis Watch
-            { 194, 4 },  // Knife
-        };
-
         public static HashSet<int> blacklist = null;
 
         private static string pricelistFile = "pricelist.json";
         private static string blacklistFile = "blacklist.txt";
-        private static string apiURL = "http://backpack.tf/api/IGetPrices/v3/?format=json&key={0}";
-        private static string apiKey = "51a1653bba25360638000001";
+        private static string apiURL = "http://www.trade.tf/api/spreadsheet.json?key={0}";
+        private static string apiKey = "528f474a9cbc39f0f5d4c60ad2c4262e";
 
         public static Price Get(int defindex, string quality, bool high)
         {
@@ -69,39 +31,23 @@ namespace SteamBot
 
         public static bool HasPrice(int defindex, string quality)
         {
-            if (old.ContainsKey(defindex))
-            {
-                defindex = old[defindex];
-            }
             JToken location = null;
             try
             {
-                location = pricelist.SelectToken(defindex.ToString()).SelectToken(quality).SelectToken("0").SelectToken("current");
+                location = pricelist.SelectToken("items").SelectToken(defindex.ToString()).SelectToken(quality).SelectToken("regular");
             }
             catch (NullReferenceException) { }
-            if (location == null)
-            {
-                return false;
-            }
-            string currency = (string)location["currency"];
-            if (currency == "metal" || currency == "keys" || currency == "earbuds" || currency == "usd")
-            {
-                return true;
-            }
-            return false;
+
+            return location != null;
         }
 
         private static void GetRaw(int defindex, string quality, bool high, out float value, out string currency)
         {
-            if (old.ContainsKey(defindex))
-            {
-                defindex = old[defindex];
-            }
-            string key = high ? "value_high" : "value";
+            string key = high ? "hi" : "low";
             JToken location = null;
             try
             {
-                location = pricelist.SelectToken(defindex.ToString()).SelectToken(quality).SelectToken("0").SelectToken("current");
+                location = pricelist.SelectToken("items").SelectToken(defindex.ToString()).SelectToken(quality).SelectToken("regular");
             }
             catch (NullReferenceException) { }
             if (location == null)
@@ -116,26 +62,22 @@ namespace SteamBot
             }
 
             value = (float)item;
-            currency = (string)location["currency"];
+            currency = (string)location["unit"];
         }
 
         private static int ToScrap(float value, string currency)
         {
-            if (currency == "metal")
+            if (currency == "r")
             {
                 return (int)Math.Round(value * 9);
             }
-            else if (currency == "keys")
+            else if (currency == "k")
             {
                 return (int)Math.Round(value * Key.Scrap);
             }
-            else if (currency == "earbuds")
+            else if (currency == "b")
             {
                 return (int)Math.Round(value * Earbuds.Scrap);
-            }
-            else if (currency == "usd")
-            {
-                return (int)Math.Round(value * USD.Scrap);
             }
             else
             {
@@ -147,11 +89,9 @@ namespace SteamBot
         {
             get
             {
-                float value;
-                string currency;
+                float value = (float)pricelist.SelectToken("units").SelectToken("k");
 
-                GetRaw(5021, "6", true, out value, out currency);
-                return new Price(ToScrap(value, currency));
+                return new Price(ToScrap(value, "r"));
             }
         }
 
@@ -159,12 +99,9 @@ namespace SteamBot
         {
             get
             {
-                float value;
-                string currency;
+                float value = (float)pricelist.SelectToken("units").SelectToken("b");
 
-                GetRaw(143, "6", true, out value, out currency);
-
-                return new Price(ToScrap(value, currency));
+                return new Price(ToScrap(value, "k"));
             }
         }
 
@@ -192,20 +129,6 @@ namespace SteamBot
             }
         }
 
-        public static Price USD
-        {
-            get
-            {
-                float value;
-                string currency;
-
-                GetRaw(5002, "6", true, out value, out currency);
-
-                return new Price((int)((1 / value) * 9));
-            }
-        }
-
-
         public static void LoadBlacklist()
         {
             if (blacklist == null)
@@ -225,8 +148,7 @@ namespace SteamBot
             try
             {
                 string raw = new WebClient().DownloadString(String.Format(apiURL, apiKey));
-                JObject temp = JObject.Parse(raw);
-                pricelist = temp["response"]["prices"];
+                pricelist = JObject.Parse(raw);
                 File.WriteAllText(pricelistFile, raw);
             }
             catch (WebException) { }
@@ -236,7 +158,7 @@ namespace SteamBot
                 StreamReader reader = new StreamReader(pricelistFile);
                 string raw = reader.ReadToEnd();
                 reader.Close();
-                pricelist = JObject.Parse(raw)["response"]["prices"];
+                pricelist = JObject.Parse(raw);
                 
             }
         }

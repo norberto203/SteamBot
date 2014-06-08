@@ -53,17 +53,7 @@ namespace SteamBot
                 reason = "Botkillers are not accepted.";
                 return false;
             }
-            int count = getNumItems(inventoryItem.Defindex, inventoryItem.Quality);
-
-            foreach (ulong id in Trade.OtherOfferedItems)
-            {
-                Inventory.Item otherItem = Trade.OtherInventory.GetItem(id);
-                if (otherItem.Defindex == inventoryItem.Defindex)
-                {
-                    count++;
-                }
-            }
-            if (count >= 4)
+            if (getNumItems(inventoryItem.Defindex, inventoryItem.Quality) >= 3)
             {
                 reason = "I have too many of that item.";
                 return false;
@@ -81,6 +71,11 @@ namespace SteamBot
             if (inventoryItem.Quality != "11")
             {
                 reason = "Item is not strange.";
+                return false;
+            }
+            if (inventoryItem.IsNotCraftable)
+            {
+                reason = "Item is not craftable.";
                 return false;
             }
             reason = null;

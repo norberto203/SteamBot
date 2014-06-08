@@ -233,16 +233,7 @@ namespace SteamBot
             if (metal.ContainsKey(inventoryItem.Defindex))
                 otherMetal += metal[inventoryItem.Defindex];
             else if (inventoryItem.Defindex == 5021)
-            {
-                if (getNumItems(5021, "6") < 4 && getNumItems(5002, "6") > 10)
-                { 
-                    otherKeys++;
-                }
-                else
-                {
-                    reason = "I cannot accept keys currently, due to either an abundance of keys or a lack of metal.";
-                }
-            }
+                otherKeys++;
             else if (ShouldBuy(inventoryItem, schemaItem, out reason) && Pricelist.HasPrice(inventoryItem.Defindex, inventoryItem.Quality))
             {
                 Price p = OtherValue(inventoryItem, schemaItem);
@@ -260,7 +251,7 @@ namespace SteamBot
             string reason;
             if (metal.ContainsKey(inventoryItem.Defindex))
                 otherMetal -= metal[inventoryItem.Defindex];
-            else if (inventoryItem.Defindex == 5021 && getNumItems(5021, "6") < 4 && getNumItems(5002, "6") > 10)
+            else if (inventoryItem.Defindex == 5021)
                 otherKeys--;
             else if (ShouldBuy(inventoryItem, schemaItem, out reason) && Pricelist.HasPrice(inventoryItem.Defindex, inventoryItem.Quality))
                 otherItemValue -= OtherValue(inventoryItem, schemaItem).Scrap;
